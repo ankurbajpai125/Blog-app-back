@@ -17,10 +17,7 @@ const whitelist = ['http://localhost:3000', 'https://blog-app-front.vercel.app',
 const corsOptions = {
   credentials: true,
   origin: (origin, callback) => {
-    if(whitelist.includes(origin))
       return callback(null, true)
-
-      callback(new Error(origin + ' Not allowed by CORS'));
   }
 }
 app.use(cors(corsOptions));
