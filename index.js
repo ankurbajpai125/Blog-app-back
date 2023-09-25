@@ -20,7 +20,7 @@ const corsOptions = {
     if(whitelist.includes(origin))
       return callback(null, true)
 
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(origin + ' Not allowed by CORS'));
   }
 }
 app.use(cors(corsOptions));
