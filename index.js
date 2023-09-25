@@ -13,7 +13,17 @@ const fs = require("fs");
 
 const salt = bcrypt.genSaltSync(10);
 const secret = "asdfghjtrdcvbnhtrdcvbnhgfd";
-app.use(cors({ credentials: true, origin: "https://blog-app-front.vercel.app/"}));
+const whitelist = ['http://localhost:3000', 'https://blog-app-front.vercel.app', 'http://blog-app-front.vercel.app'];
+const corsOptions = {
+  credentials: true,
+  origin: (origin, callback) => {
+    if(whitelist.includes(origin))
+      return callback(null, true)
+
+      callback(new Error('Not allowed by CORS'));
+  }
+}
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
