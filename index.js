@@ -53,7 +53,7 @@ app.post('/login', async (req, res) => {
   if (passOk) {
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
       if (err) throw err;
-      res.cookie("token", token, { domain: 'blog-app-front.vercel.app'}).json({
+      res.cookie("token", token).json({
         id: userDoc._id,
         username,
       });
@@ -65,6 +65,7 @@ app.post('/login', async (req, res) => {
 
 app.get('/profile', (req, res) => {
   const { token } = req.cookies;
+  console.log('token ' + token);
   const temp = {};
   jwt.verify(token, secret, {}, (err, info) => {
     if (err) res.json(temp);
