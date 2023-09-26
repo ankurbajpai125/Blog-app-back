@@ -13,7 +13,7 @@ const fs = require("fs");
 
 const salt = bcrypt.genSaltSync(10);
 const secret = "asdfghjtrdcvbnhtrdcvbnhgfd";
-const whitelist = ['http://localhost:3000', 'https://blog-app-front.vercel.app', 'http://blog-app-front.vercel.app'];
+const whitelist = ['https://blog-app-front.vercel.app'];
 const corsOptions = {
   credentials: true,
   origin: (origin, callback) => {
