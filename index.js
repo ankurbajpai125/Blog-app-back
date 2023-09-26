@@ -24,9 +24,14 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
+app.use("/static", express.static(__dirname + "/client/static"));
 mongoose.connect(
   "mongodb+srv://ankurbajpai2019:IkxsHfk87LiE62uj@cluster0.6khbkix.mongodb.net/?retryWrites=true&w=majority"
 );
+
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/client/index.html');
+});
 
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
