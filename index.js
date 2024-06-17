@@ -6,143 +6,177 @@ const Post = require("./models/Post");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const app = express();
 const multer = require("multer");
-const uploadMiddleware = multer({ dest: "uploads/" });
 const fs = require("fs");
+
+const app = express();
+const uploadMiddleware = multer({ dest: "uploads/" });
 
 const salt = bcrypt.genSaltSync(10);
 const secret = "asdfghjtrdcvbnhtrdcvbnhgfd";
-const whitelist = ['blog-app-back-dsyd.onrender.com'];
-const corsOptions = {
-  credentials: true,
-  origin: (origin, callback) => {
-      return callback(null, true)
-  }
-}
-app.use(cors(corsOptions));
+
+// Middleware
+app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
 app.use("/uploads", express.static(__dirname + "/uploads"));
-app.use("/static", express.static(__dirname + "/client/static"));
-mongoose.connect(
-  "mongodb+srv://ankurbajpai2019:IkxsHfk87LiE62uj@cluster0.6khbkix.mongodb.net/?retryWrites=true&w=majority"
-);
 
-app.get('/', (req, res) => {
-  res.sendFile(__dirname + '/client/index.html');
+// MongoDB Connection
+mongoose.connect(
+  "mongodb+srv://your_username:your_password@your_cluster_url/your_database_name",
+  {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    useCreateIndex: true,
+  }
+);
+const db = mongoose.connection;
+db.on("error", console.error.bind(console, "MongoDB connection error:"));
+db.once("open", () => {
+  console.log("Connected to MongoDB");
 });
 
-app.post('/register', async (req, res) => {
+// Routes
+
+// Register a new user
+app.post("/register", async (req, res) => {
   const { username, password } = req.body;
   try {
-    const userDoc = await User.create({
-      username,
-      password: bcrypt.hashSync(password, salt),
-    });
+    const hashedPassword = bcrypt.hashSync(password, salt);
+    const userDoc = await User.create({ username, password: hashedPassword });
     res.json(userDoc);
-  } catch (e) {
-    res.status(400).json(e);
+  } catch (error) {
+    console.error(error);
+    res.status(400).json({ error: "Registration failed" });
   }
 });
 
-app.post('/login', async (req, res) => {
+// User login
+app.post("/login", async (req, res) => {
   const { username, password } = req.body;
-  const userDoc = await User.findOne({ username });
-  const passOk = bcrypt.compareSync(password, userDoc.password);
-  if (passOk) {
-    jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
-      if (err) throw err;
-      res.cookie("token", token).json({
-        id: userDoc._id,
-        username,
-      });
+  try {
+    const userDoc = await User.findOne({ username });
+    if (!userDoc) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const isPasswordValid = bcrypt.compareSync(password, userDoc.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: "Invalid password" });
+    }
+    const token = jwt.sign({ id: userDoc._id }, secret, { expiresIn: "1h" });
+    res.cookie("token", token, { httpOnly: true }).json({
+      id: userDoc._id,
+      username: userDoc.username,
     });
-  } else {
-    res.status(400).json("wrong credential");
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Login failed" });
   }
 });
 
-app.get('/profile', (req, res) => {
-  const { token } = req.cookies;
-  console.log('token ' + token);
-  const temp = {};
-  jwt.verify(token, secret, {}, (err, info) => {
-    if (err) res.json(temp);
-    res.json(info);
-  });
+// User logout
+app.post("/logout", (req, res) => {
+  res.clearCookie("token").json({ message: "Logout successful" });
 });
 
-app.post('/logout', (req, res) => {
-  res.cookie("token", "").json("ok");
-});
+// Create a new post
+app.post("/post", uploadMiddleware.single("file"), async (req, res) => {
+  try {
+    const { originalname, path } = req.file;
+    const parts = originalname.split(".");
+    const ext = parts[parts.length - 1];
+    const newPath = path + "." + ext;
+    fs.renameSync(path, newPath);
 
-app.post('/post', uploadMiddleware.single("file"), async (req, res) => {
-  const { originalname, path } = req.file;
-  const parts = originalname.split('.');
-  const ext = parts[parts.length - 1];
-  const newPath = path + '.' + ext;
-  fs.renameSync(path, newPath);
-
-  const {token} = req.cookies;
-  jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
-
+    const { token } = req.cookies;
+    const decoded = jwt.verify(token, secret);
     const { title, summary, content } = req.body;
+
     const postDoc = await Post.create({
       title,
       summary,
       content,
       cover: newPath,
-      author: info.id,
+      author: decoded.id,
     });
     res.json(postDoc);
-  });
-});
-
-app.put('/post', uploadMiddleware.single("file"), async (req, res) => {
-  let newPath = null;
-  if (req.file) {
-    const { originalname, path } = req.file;
-    const parts = originalname.split('.');
-    const ext = parts[parts.length - 1];
-    newPath = path + '.' + ext;
-    fs.renameSync(path, newPath);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to create post" });
   }
-  const {token} = req.cookies;
-  jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
-    const { id, title, summary, content } = req.body;
-    const postDoc = await Post.findById(id);
-    const isAuthor = JSON.stringify(postDoc.author) === JSON.stringify(info.id);
-   //  res.json({ isAuthor, postDoc, info });
-    if (!isAuthor) {
-      return res.status(400).json("you are not the author");
+});
+
+// Update a post
+app.put("/post/:id", uploadMiddleware.single("file"), async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const { title, summary, content } = req.body;
+    let cover = null;
+
+    if (req.file) {
+      const { originalname, path } = req.file;
+      const parts = originalname.split(".");
+      const ext = parts[parts.length - 1];
+      const newPath = path + "." + ext;
+      fs.renameSync(path, newPath);
+      cover = newPath;
     }
-    await postDoc.updateOne({
-      title,
-      summary,
-      content,
-      cover: newPath ? newPath : postDoc.cover,
-    });
-   
+
+    const { token } = req.cookies;
+    const decoded = jwt.verify(token, secret);
+    const postDoc = await Post.findById(postId);
+    if (!postDoc) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    if (postDoc.author.toString() !== decoded.id) {
+      return res
+        .status(403)
+        .json({ error: "Unauthorized to update this post" });
+    }
+    postDoc.title = title;
+    postDoc.summary = summary;
+    postDoc.content = content;
+    if (cover) {
+      postDoc.cover = cover;
+    }
+    await postDoc.save();
     res.json(postDoc);
-  });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to update post" });
+  }
 });
 
-app.get('/post', async (req, res) => {
-  res.json(
-    await Post.find()
-      .populate("author", ["username"])
-      .sort({ createdAt: -1 })
-      .limit(20)
-  );
+// Get all posts
+app.get("/posts", async (req, res) => {
+  try {
+    const posts = await Post.find().populate("author", "username").exec();
+    res.json(posts);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch posts" });
+  }
 });
 
-app.get('/post/:id', async (req, res) => {
-  const { id } = req.params;
-  const postDoc = await Post.findById(id).populate("author", ["username"]);
-  res.json(postDoc);
+// Get a specific post by ID
+app.get("/post/:id", async (req, res) => {
+  try {
+    const postId = req.params.id;
+    const post = await Post.findById(postId)
+      .populate("author", "username")
+      .exec();
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+    res.json(post);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Failed to fetch post" });
+  }
 });
 
-app.listen(4000);
+// Start server
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
