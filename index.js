@@ -23,7 +23,7 @@ app.use("/uploads", express.static(__dirname + "/uploads"));
 
 // MongoDB Connection
 mongoose.connect(
-  "mongodb+srv://ankurbajpai2019@cluster0.6khbkix.mongodb.net/?retryWrites=true&w=majority",
+  "mongodb+srv://ankurbajpai2019:IkxsHfk87LiE62uj@cluster0.6khbkix.mongodb.net/?retryWrites=true&w=majority",
   {
     useNewUrlParser: true,
     useUnifiedTopology: true,
